@@ -26,10 +26,12 @@ class HealthLocalDatasource {
   }
 
   Future<List<SleepData>> getSleepData({int days = 30}) async {
-    final cutoff = DateTime.now().subtract(Duration(days: days));
+    final today = DateTime.now();
+    final cutoff = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: days - 1));
     return _sleepBox.values
         .map((m) => m.toEntity())
-        .where((d) => d.date.isAfter(cutoff))
+        .where((d) => !d.date.isBefore(cutoff))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
   }
@@ -46,10 +48,12 @@ class HealthLocalDatasource {
   }
 
   Future<List<ActivityData>> getActivityData({int days = 30}) async {
-    final cutoff = DateTime.now().subtract(Duration(days: days));
+    final today = DateTime.now();
+    final cutoff = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: days - 1));
     return _activityBox.values
         .map((m) => m.toEntity())
-        .where((d) => d.date.isAfter(cutoff))
+        .where((d) => !d.date.isBefore(cutoff))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
   }
@@ -64,11 +68,25 @@ class HealthLocalDatasource {
   }
 
   Future<List<DailyHealthSummary>> getSummaries({int days = 30}) async {
-    final cutoff = DateTime.now().subtract(Duration(days: days));
-    return _summaryBox.values
+    final today = DateTime.now();
+    final cutoff = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: days - 1));
+
+    final all = _summaryBox.values
         .map((m) => m.toEntity())
-        .where((s) => s.date.isAfter(cutoff))
-        .toList()
+        .where((s) => !s.date.isBefore(cutoff));
+
+    // Дедуплицируем по дате — старые записи с UUID-ключами могут соседствовать
+    // с новыми dateKey-записями для тех же дней
+    final byDate = <String, DailyHealthSummary>{};
+    for (final s in all) {
+      final k =
+          '${s.date.year}-${s.date.month.toString().padLeft(2, '0')}-${s.date.day.toString().padLeft(2, '0')}';
+      byDate[k] = s;
+    }
+    return byDate.values.toList()
       ..sort((a, b) => a.date.compareTo(b.date));
   }
+
+  Future<void> clearSummaries() async => _summaryBox.clear();
 }

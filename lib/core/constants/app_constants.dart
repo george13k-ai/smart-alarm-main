@@ -29,10 +29,15 @@ class AppConstants {
   static const int targetSleepMinutes = 480; // 8 часов
   static const int targetSteps = 10000;
 
+  // Color game
+  static const int colorTapsRequired = 5;
+
   // Snooze
   static const int snoozeMinutes = 1;
   static const int ringDurationSeconds = 60;
-  static const int gameTimeLimitSeconds = 90;
+  static const int mathGameTimeLimitSeconds = 60;
+  static const int shakeGameTimeLimitSeconds = 45;
+  static const int colorGameTimeLimitSeconds = 60;
   static const int gameRetryDelaySeconds = 30;
 
   // Alarm request code base (уникальный id для каждого будильника)
@@ -61,7 +66,7 @@ class AppConstants {
 enum DismissType {
   math,
   shake,
-  qr;
+  color;
 
   String get label {
     switch (this) {
@@ -69,8 +74,8 @@ enum DismissType {
         return 'Математика';
       case DismissType.shake:
         return 'Встряхивание';
-      case DismissType.qr:
-        return 'QR-код';
+      case DismissType.color:
+        return 'Цвета';
     }
   }
 }

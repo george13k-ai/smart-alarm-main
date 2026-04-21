@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+
 import '../../../core/constants/app_constants.dart';
 
 class ShakeGameScreen extends StatefulWidget {
@@ -19,7 +21,6 @@ class _ShakeGameScreenState extends State<ShakeGameScreen>
   double _lastMagnitude = 0;
   bool _inShake = false;
 
-  // Анимация встряхивания
   late AnimationController _anim;
   late Animation<double> _offsetAnim;
 
@@ -44,12 +45,10 @@ class _ShakeGameScreenState extends State<ShakeGameScreen>
   }
 
   void _onAccelerometer(AccelerometerEvent event) {
-    // Вычисляем вектор ускорения (исключаем гравитацию ~ 9.8)
     final magnitude = sqrt(
       event.x * event.x + event.y * event.y + event.z * event.z,
     );
 
-    // Детектируем резкое изменение
     final delta = (magnitude - _lastMagnitude).abs();
     _lastMagnitude = magnitude;
 
@@ -63,11 +62,11 @@ class _ShakeGameScreenState extends State<ShakeGameScreen>
 
       if (_shakeCount >= AppConstants.shakeCountRequired) {
         _subscription?.cancel();
-        Future.delayed(const Duration(milliseconds: 300), widget.onSuccess);
+        widget.onSuccess(); // устанавливает gameResolved = true
+        if (mounted) Navigator.of(context).pop(true); // закрываем сами себя
         return;
       }
 
-      // Cooldown чтобы не засчитывать несколько раз за одно движение
       Future.delayed(const Duration(milliseconds: 300), () {
         _inShake = false;
       });
@@ -76,7 +75,8 @@ class _ShakeGameScreenState extends State<ShakeGameScreen>
 
   @override
   Widget build(BuildContext context) {
-    final progress = _shakeCount / AppConstants.shakeCountRequired;
+    final progress =
+        (_shakeCount / AppConstants.shakeCountRequired).clamp(0.0, 1.0);
 
     return PopScope(
       canPop: false,
@@ -87,65 +87,73 @@ class _ShakeGameScreenState extends State<ShakeGameScreen>
           foregroundColor: Colors.white,
           automaticallyImplyLeading: false,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Встряхни телефон!',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${_shakeCount} / ${AppConstants.shakeCountRequired}',
-                style: const TextStyle(color: Colors.white70, fontSize: 18),
-              ),
-              const SizedBox(height: 40),
-
-              // Круговой прогресс
-              SizedBox(
-                width: 180,
-                height: 180,
-                child: Stack(
-                  alignment: Alignment.center,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(minHeight: constraints.maxHeight - 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      value: progress.clamp(0.0, 1.0),
-                      strokeWidth: 12,
-                      valueColor: const AlwaysStoppedAnimation(Colors.orangeAccent),
-                      backgroundColor: Colors.white24,
+                    const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Встряхни телефон!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    // Анимированная иконка встряхивания
-                    AnimatedBuilder(
-                      animation: _offsetAnim,
-                      builder: (_, child) => Transform.translate(
-                        offset: Offset(_offsetAnim.value, 0),
-                        child: child,
+                    const SizedBox(height: 8),
+                    Text(
+                      '$_shakeCount / ${AppConstants.shakeCountRequired}',
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 18),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: 180,
+                      height: 180,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 12,
+                            valueColor: const AlwaysStoppedAnimation(
+                                Colors.orangeAccent),
+                            backgroundColor: Colors.white24,
+                          ),
+                          AnimatedBuilder(
+                            animation: _offsetAnim,
+                            builder: (_, child) => Transform.translate(
+                              offset: Offset(_offsetAnim.value, 0),
+                              child: child,
+                            ),
+                            child: const Icon(
+                              Icons.phone_android,
+                              size: 80,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: const Icon(
-                        Icons.phone_android,
-                        size: 80,
-                        color: Colors.white,
-                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      'Двигай телефон резко из стороны в сторону',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54, fontSize: 16),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 40),
-
-              // Подсказка
-              const Text(
-                'Двигай телефон резко из стороны в сторону',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 16),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

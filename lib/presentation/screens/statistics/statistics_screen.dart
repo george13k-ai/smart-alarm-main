@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../domain/entities/achievement.dart';
 import '../../../domain/entities/health_data.dart';
 import '../../providers/achievement_provider.dart';
 import '../../providers/health_provider.dart';
@@ -77,7 +76,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
   @override
   Widget build(BuildContext context) {
     final summariesAsync = ref.watch(summariesProvider(_days));
-    final achievements = ref.watch(achievementProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -119,19 +117,12 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
       body: summariesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Ошибка: $e')),
-        data: (summaries) => Column(
+        data: (summaries) => TabBarView(
+          controller: _tabs,
           children: [
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _SleepChart(summaries: summaries),
-                  _ActivityChart(summaries: summaries),
-                  _RecoveryChart(summaries: summaries),
-                ],
-              ),
-            ),
-            _AchievementsPanel(achievements: achievements),
+            _SleepChart(summaries: summaries),
+            _ActivityChart(summaries: summaries),
+            _RecoveryChart(summaries: summaries),
           ],
         ),
       ),
@@ -179,12 +170,19 @@ class _SleepChart extends StatelessWidget {
             child: BarChart(
               BarChartData(
                 barGroups: bars,
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+                      '${rod.toY.toStringAsFixed(2)} ч',
+                      const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
                 titlesData: FlTitlesData(
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      getTitlesWidget: (v, _) =>
-                          _dateLabel(summaries, v.toInt()),
+                      getTitlesWidget: (v, _) => _dateLabel(summaries, v),
                     ),
                   ),
                   leftTitles: AxisTitles(
@@ -265,8 +263,7 @@ class _ActivityChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      getTitlesWidget: (v, _) =>
-                          _dateLabel(summaries, v.toInt()),
+                      getTitlesWidget: (v, _) => _dateLabel(summaries, v),
                     ),
                   ),
                   leftTitles: AxisTitles(
@@ -364,8 +361,7 @@ class _RecoveryChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      getTitlesWidget: (v, _) =>
-                          _dateLabel(summaries, v.toInt()),
+                      getTitlesWidget: (v, _) => _dateLabel(summaries, v),
                     ),
                   ),
                   leftTitles: AxisTitles(
@@ -393,43 +389,6 @@ class _RecoveryChart extends StatelessWidget {
     if (index >= 75) return Colors.green;
     if (index >= 50) return Colors.orange;
     return Colors.red;
-  }
-}
-
-// ---- Достижения ----
-
-class _AchievementsPanel extends StatelessWidget {
-  final List<Achievement> achievements;
-  const _AchievementsPanel({required this.achievements});
-
-  @override
-  Widget build(BuildContext context) {
-    final unlocked = achievements.where((a) => a.isUnlocked).toList();
-    if (unlocked.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      height: 80,
-      color: Theme.of(context).colorScheme.surface,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: unlocked.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) {
-          final a = unlocked[i];
-          return Tooltip(
-            message: a.title,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(a.icon, style: const TextStyle(fontSize: 28)),
-                Text(a.title, style: const TextStyle(fontSize: 10)),
-              ],
-            ),
-          );
-        },
-      ),
-    );
   }
 }
 
@@ -481,8 +440,15 @@ class _MetricRow extends StatelessWidget {
   }
 }
 
-Widget _dateLabel(List<DailyHealthSummary> summaries, int index) {
+Widget _dateLabel(List<DailyHealthSummary> summaries, double value) {
+  final index = value.round();
+  if ((value - index).abs() > 0.001) return const SizedBox.shrink();
   if (index < 0 || index >= summaries.length) return const SizedBox.shrink();
+
+  final step = (summaries.length / 6).ceil().clamp(1, 99);
+  final isLast = index == summaries.length - 1;
+  if (!isLast && index % step != 0) return const SizedBox.shrink();
+
   final d = summaries[index].date;
   return Padding(
     padding: const EdgeInsets.only(top: 4),

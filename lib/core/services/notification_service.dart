@@ -14,6 +14,12 @@ class NotificationService {
 
   static const List<int> _allSlots = [0, 1, 2, 3, 4, 5, 6, 7, 99];
 
+  bool _alarmScreenShowing = false;
+
+  void onAlarmScreenClosed() {
+    _alarmScreenShowing = false;
+  }
+
   Future<void> initialize() async {
     await pkg.Alarm.init();
     await _requestPermissions();
@@ -99,6 +105,8 @@ class NotificationService {
   }
 
   void _navigateToAlarm(String alarmId) async {
+    if (_alarmScreenShowing) return;
+
     final nav = navigatorKey?.currentState;
     if (nav == null) {
       // Navigator not ready yet (cold start) — retry after first frame
@@ -107,11 +115,14 @@ class NotificationService {
       );
       return;
     }
+
+    _alarmScreenShowing = true;
+
     final getAlarm = findAlarmById;
-    if (getAlarm == null) return;
+    if (getAlarm == null) { _alarmScreenShowing = false; return; }
 
     final alarm = await getAlarm(alarmId);
-    if (alarm == null) return;
+    if (alarm == null) { _alarmScreenShowing = false; return; }
 
     nav.pushNamedAndRemoveUntil(
       '/alarm_ringing',

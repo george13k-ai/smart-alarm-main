@@ -15,4 +15,7 @@ abstract class HealthRepository {
 
   /// Получить сводки за последние [days] дней
   Future<List<DailyHealthSummary>> getDailySummaries({int days = 30});
+
+  /// Очистить все сохранённые сводки (вызывается перед пересчётом)
+  Future<void> clearDailySummaries();
 }

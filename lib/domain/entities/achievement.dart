@@ -77,14 +77,6 @@ class Achievement {
           target: 480,
         ),
         const Achievement(
-          id: 'recovery_90',
-          title: 'Пик формы',
-          description: 'Достигни индекса восстановления 90+',
-          icon: '⚡',
-          isUnlocked: false,
-          target: 90,
-        ),
-        const Achievement(
           id: 'math_master',
           title: 'Математик',
           description: 'Реши 50 задач в режиме "Математика"',

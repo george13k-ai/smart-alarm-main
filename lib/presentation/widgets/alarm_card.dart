@@ -90,8 +90,8 @@ class AlarmCard extends ConsumerWidget {
       case DismissType.shake:
         icon = Icons.vibration;
         break;
-      case DismissType.qr:
-        icon = Icons.qr_code_scanner;
+      case DismissType.color:
+        icon = Icons.palette_outlined;
         break;
     }
     return Icon(icon, size: 20);

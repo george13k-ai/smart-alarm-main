@@ -9,8 +9,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../domain/entities/alarm.dart';
 import '../../providers/achievement_provider.dart';
+import '../games/color_game_screen.dart';
 import '../games/math_game_screen.dart';
-import '../games/qr_game_screen.dart';
 import '../games/shake_game_screen.dart';
 
 class AlarmRingingScreen extends ConsumerStatefulWidget {
@@ -66,10 +66,12 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
     );
   }
 
-  Future<void> _stopCurrentAlarm() async {
+  Future<void> _stopCurrentAlarm({bool rescheduleRecurring = true}) async {
     _ringTimer?.cancel();
     await NotificationService.instance.stopAlarmAudio(widget.alarm.id);
-    if (widget.alarm.weekdays.isNotEmpty && widget.alarm.isEnabled) {
+    if (rescheduleRecurring &&
+        widget.alarm.weekdays.isNotEmpty &&
+        widget.alarm.isEnabled) {
       await NotificationService.instance.scheduleAlarm(widget.alarm);
     }
   }
@@ -78,6 +80,7 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
     if (_retryScheduled) return;
     _retryScheduled = true;
     _dismissed = true;
+    NotificationService.instance.onAlarmScreenClosed();
     await _stopCurrentAlarm();
     await NotificationService.instance.showSnoozeNotification(
       widget.alarm,
@@ -99,17 +102,17 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
     if (_dismissed || _gameInProgress) return;
     _gameInProgress = true;
 
-    await _stopCurrentAlarm();
+    await _stopCurrentAlarm(rescheduleRecurring: false);
 
-    var solved = false;
+    final timeLimitSeconds = _gameTimeLimitFor(widget.alarm.dismissType);
+    var gameResolved = false;
+
     final timeoutTimer = Timer(
-      const Duration(seconds: AppConstants.gameTimeLimitSeconds),
+      Duration(seconds: timeLimitSeconds),
       () {
-        if (!mounted || _dismissed || solved || !_gameInProgress) return;
-        Navigator.of(context).pop();
-        _scheduleRetryAndClose(
-          const Duration(seconds: AppConstants.gameRetryDelaySeconds),
-        );
+        if (!mounted || _dismissed || !_gameInProgress || gameResolved) return;
+        gameResolved = true;
+        Navigator.of(context).pop(); // pop game screen without result
       },
     );
 
@@ -117,34 +120,36 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
     switch (widget.alarm.dismissType) {
       case DismissType.math:
         game = MathGameScreen(onSuccess: () {
-          solved = true;
-          _dismiss();
+          if (gameResolved) return;
+          gameResolved = true;
+          // Экран закроется сам своим Navigator.of(context)
         });
       case DismissType.shake:
         game = ShakeGameScreen(onSuccess: () {
-          solved = true;
-          _dismiss();
+          if (gameResolved) return;
+          gameResolved = true;
         });
-      case DismissType.qr:
-        game = QrGameScreen(
-          savedCode: widget.alarm.qrCode ?? '',
-          onSuccess: () {
-            solved = true;
-            _dismiss();
-          },
-        );
+      case DismissType.color:
+        game = ColorGameScreen(onSuccess: () {
+          if (gameResolved) return;
+          gameResolved = true;
+        });
     }
 
-    if (mounted) {
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => game));
-    }
+    final solved = mounted
+        ? (await Navigator.push<bool>(
+                context, MaterialPageRoute(builder: (_) => game)) ??
+            false)
+        : false;
 
     timeoutTimer.cancel();
     _gameInProgress = false;
 
     if (!mounted) return;
 
-    if (!solved && !_dismissed) {
+    if (solved && !_dismissed) {
+      await _dismiss();
+    } else if (!solved && !_dismissed) {
       await _scheduleRetryAndClose(
         const Duration(seconds: AppConstants.gameRetryDelaySeconds),
       );
@@ -162,11 +167,14 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
   Future<void> _dismiss() async {
     if (_dismissed) return;
     _dismissed = true;
-    await _recordAchievementProgress();
-    await _stopCurrentAlarm();
-    if (mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    }
+    NotificationService.instance.onAlarmScreenClosed();
+    try {
+      await _recordAchievementProgress();
+    } catch (_) {}
+    try {
+      await _stopCurrentAlarm();
+    } catch (_) {}
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -223,6 +231,11 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
                   onPressed: _openGame,
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Game time: ${_formatSeconds(_gameTimeLimitFor(widget.alarm.dismissType))}',
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
+              ),
               const SizedBox(height: 16),
               _AutoRepeatCountdown(ringTime: _ringTime),
               const SizedBox(height: 32),
@@ -239,9 +252,26 @@ class _AlarmRingingScreenState extends ConsumerState<AlarmRingingScreen>
         return const Icon(Icons.calculate);
       case DismissType.shake:
         return const Icon(Icons.vibration);
-      case DismissType.qr:
-        return const Icon(Icons.qr_code_scanner);
+      case DismissType.color:
+        return const Icon(Icons.palette);
     }
+  }
+
+  int _gameTimeLimitFor(DismissType type) {
+    switch (type) {
+      case DismissType.math:
+        return AppConstants.mathGameTimeLimitSeconds;
+      case DismissType.shake:
+        return AppConstants.shakeGameTimeLimitSeconds;
+      case DismissType.color:
+        return AppConstants.colorGameTimeLimitSeconds;
+    }
+  }
+
+  String _formatSeconds(int totalSeconds) {
+    final m = totalSeconds ~/ 60;
+    final s = totalSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 }
 

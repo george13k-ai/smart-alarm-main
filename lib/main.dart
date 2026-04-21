@@ -1,4 +1,3 @@
-import 'package:alarm/alarm.dart' as pkg;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -76,28 +75,6 @@ class _SmartAlarmAppState extends State<SmartAlarmApp> {
   @override
   void initState() {
     super.initState();
-    // NotificationService.initialize() already subscribes to Alarm.ringing with retry logic.
-    // Here we only handle the edge case where the stream already fired before the listener
-    // was attached (e.g. app cold-started from a full-screen intent while screen was off).
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final alarms = await pkg.Alarm.getAlarms();
-      for (final a in alarms) {
-        if (await pkg.Alarm.isRinging(a.id)) {
-          final payload = a.payload;
-          if (payload != null) {
-            NotificationService.instance.findAlarmById
-                ?.call(payload)
-                .then((alarm) {
-              if (alarm != null) {
-                navigatorKey.currentState
-                    ?.pushNamed('/alarm_ringing', arguments: alarm);
-              }
-            });
-            break;
-          }
-        }
-      }
-    });
   }
 
   @override

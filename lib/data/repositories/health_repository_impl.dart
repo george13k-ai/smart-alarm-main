@@ -22,23 +22,31 @@ class HealthRepositoryImpl implements HealthRepository {
 
       List<SleepData> sleep = const [];
       List<ActivityData> activity = const [];
+      var sleepFetched = false;
+      var activityFetched = false;
 
       try {
         sleep = await _remote.fetchSleep(days: days);
+        sleepFetched = true;
       } catch (_) {}
 
       try {
         activity = await _remote.fetchActivity(days: days);
+        activityFetched = true;
       } catch (_) {}
 
-      if (sleep.isNotEmpty) {
+      if (sleepFetched) {
         await _local.clearSleepData();
-        await _local.saveSleepData(sleep);
+        if (sleep.isNotEmpty) {
+          await _local.saveSleepData(sleep);
+        }
       }
 
-      if (activity.isNotEmpty) {
+      if (activityFetched) {
         await _local.clearActivityData();
-        await _local.saveActivityData(activity);
+        if (activity.isNotEmpty) {
+          await _local.saveActivityData(activity);
+        }
       }
     } catch (_) {
       // Keep previously cached data if Health Connect fails.
@@ -60,4 +68,7 @@ class HealthRepositoryImpl implements HealthRepository {
   @override
   Future<List<DailyHealthSummary>> getDailySummaries({int days = 30}) =>
       _local.getSummaries(days: days);
+
+  @override
+  Future<void> clearDailySummaries() => _local.clearSummaries();
 }

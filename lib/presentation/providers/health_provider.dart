@@ -15,17 +15,27 @@ final _syncUseCase = SyncHealthDataUseCase(_healthRepo);
 
 // ---- Today Recovery Provider ----
 
-/// Провайдер индекса восстановления на сегодня
 class TodayRecoveryNotifier extends StateNotifier<RecoveryResult?> {
-  TodayRecoveryNotifier() : super(null) {
+  final Ref _ref;
+
+  TodayRecoveryNotifier(this._ref) : super(null) {
     _ensureDataAndCompute();
   }
 
   Future<void> _ensureDataAndCompute() async {
-    // При старте автоматически подгружаем (демо если Health Connect недоступен)
-    final existing = await _healthRepo.getDailySummaries(days: 7);
-    if (existing.isEmpty) {
-      await _syncUseCase();
+    final today = DateTime.now();
+    final todayKey =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final existing = await _healthRepo.getDailySummaries(days: 1);
+    final hasTodayData = existing.any((s) {
+      final k =
+          '${s.date.year}-${s.date.month.toString().padLeft(2, '0')}-${s.date.day.toString().padLeft(2, '0')}';
+      return k == todayKey;
+    });
+    if (!hasTodayData) {
+      await _syncUseCase(days: 30);
+      // Инвалидируем кеш графиков — иначе UI показывает устаревшие данные
+      _ref.invalidate(summariesProvider);
     }
     await _compute();
   }
@@ -52,14 +62,15 @@ class TodayRecoveryNotifier extends StateNotifier<RecoveryResult?> {
   }
 
   Future<void> sync() async {
-    await _syncUseCase();
+    await _syncUseCase(days: 30);
+    _ref.invalidate(summariesProvider);
     await _compute();
   }
 }
 
 final todayRecoveryProvider =
     StateNotifierProvider<TodayRecoveryNotifier, RecoveryResult?>(
-  (ref) => TodayRecoveryNotifier(),
+  (ref) => TodayRecoveryNotifier(ref),
 );
 
 // ---- Summaries Provider ----

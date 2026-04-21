@@ -140,9 +140,9 @@ class MainActivity : FlutterFragmentActivity() {
                                         record.endTime,
                                     ).toInt()
                                     mapOf(
-                                        "dateMs" to record.startTime.toEpochMilli(),
+                                        "dateMs" to floorToLocalDay(record.endTime.toEpochMilli()),
                                         "durationMinutes" to durationMinutes,
-                                        "source" to "health_connect",
+                                        "source" to (record.metadata.dataOrigin.packageName ?: "health_connect"),
                                     )
                                 }
 
@@ -194,12 +194,16 @@ class MainActivity : FlutterFragmentActivity() {
                                 )
                                 val stepsResponse = client.readRecords(stepsRequest)
 
-                                val stepsByDay = mutableMapOf<Long, Long>()
+                                val stepsByPackage = mutableMapOf<String, MutableMap<Long, Long>>()
                                 for (record in stepsResponse.records) {
-                                    val dayMs = floorToLocalDay(record.startTime.toEpochMilli())
-                                    stepsByDay[dayMs] =
-                                        (stepsByDay[dayMs] ?: 0L) + record.count
+                                    val packageName = record.metadata.dataOrigin.packageName ?: "unknown"
+                                    val dayMs = floorToLocalDay(record.endTime.toEpochMilli())
+                                    val perDay = stepsByPackage.getOrPut(packageName) { mutableMapOf() }
+                                    perDay[dayMs] = (perDay[dayMs] ?: 0L) + record.count
                                 }
+
+                                val selectedPackage = selectPreferredStepsPackage(stepsByPackage)
+                                val stepsByDay = stepsByPackage[selectedPackage] ?: emptyMap()
 
                                 val hrRequest = ReadRecordsRequest(
                                     HeartRateRecord::class,
@@ -283,6 +287,20 @@ class MainActivity : FlutterFragmentActivity() {
         } catch (_: Exception) {
             startActivity(Intent(Intent.ACTION_VIEW, webUri))
         }
+    }
+
+    private fun selectPreferredStepsPackage(
+        stepsByPackage: Map<String, Map<Long, Long>>,
+    ): String {
+        if (stepsByPackage.isEmpty()) return "unknown"
+
+        // Prefer Google Fit if present because user usually verifies numbers there.
+        val googleFit = "com.google.android.apps.fitness"
+        if (stepsByPackage.containsKey(googleFit)) return googleFit
+
+        // Otherwise choose the package with largest total over the selected period.
+        return stepsByPackage.maxByOrNull { (_, perDay) -> perDay.values.sumOf { it } }?.key
+            ?: "unknown"
     }
 
     private fun floorToLocalDay(epochMs: Long): Long {

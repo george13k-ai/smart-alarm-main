@@ -1,5 +1,7 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+
 import '../../../core/constants/app_constants.dart';
 
 class MathGameScreen extends StatefulWidget {
@@ -31,13 +33,12 @@ class _MathGameScreenState extends State<MathGameScreen> {
   }
 
   _MathProblem _generateProblem() {
-    // Сложность растёт с каждым решённым примером
     final difficulty = _solved + 1;
     final maxNum = 10 * difficulty;
 
     final a = _random.nextInt(maxNum) + 1;
     final b = _random.nextInt(maxNum) + 1;
-    final ops = ['+', '-', '×'];
+    final ops = ['+', '-', '*'];
     final op = ops[_random.nextInt(difficulty > 2 ? 3 : 2)];
 
     int answer;
@@ -46,7 +47,7 @@ class _MathGameScreenState extends State<MathGameScreen> {
         answer = a + b;
       case '-':
         answer = a - b;
-      case '×':
+      case '*':
         answer = a * b;
       default:
         answer = a + b;
@@ -64,23 +65,31 @@ class _MathGameScreenState extends State<MathGameScreen> {
     }
 
     if (parsed == _current.answer) {
+      final nextSolved = _solved + 1;
+      final completed = nextSolved >= AppConstants.mathProblemsRequired;
+
       _answerController.clear();
       setState(() {
         _errorText = null;
-        _solved++;
+        _solved = nextSolved;
         _showSuccess = true;
       });
 
+      if (completed) {
+        widget.onSuccess(); // устанавливает gameResolved = true в _openGame
+        // Закрываем экран своим контекстом через 300 мс (даём увидеть чекмарк)
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) Navigator.of(context).pop(true);
+        });
+        return;
+      }
+
       Future.delayed(const Duration(milliseconds: 400), () {
         if (!mounted) return;
-        if (_solved >= AppConstants.mathProblemsRequired) {
-          widget.onSuccess();
-        } else {
-          setState(() {
-            _showSuccess = false;
-            _current = _generateProblem();
-          });
-        }
+        setState(() {
+          _showSuccess = false;
+          _current = _generateProblem();
+        });
       });
     } else {
       setState(() => _errorText = 'Неверно, попробуй снова');
@@ -90,8 +99,11 @@ class _MathGameScreenState extends State<MathGameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentTask =
+        (_solved + 1).clamp(1, AppConstants.mathProblemsRequired);
+
     return PopScope(
-      canPop: false, // нельзя выйти без решения
+      canPop: false,
       child: Scaffold(
         backgroundColor: Colors.indigo.shade900,
         appBar: AppBar(
@@ -99,7 +111,7 @@ class _MathGameScreenState extends State<MathGameScreen> {
           foregroundColor: Colors.white,
           automaticallyImplyLeading: false,
           title: Text(
-            'Задача ${_solved + 1} из ${AppConstants.mathProblemsRequired}',
+            'Задача $currentTask из ${AppConstants.mathProblemsRequired}',
           ),
         ),
         body: Padding(
@@ -107,7 +119,6 @@ class _MathGameScreenState extends State<MathGameScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Прогресс
               LinearProgressIndicator(
                 value: _solved / AppConstants.mathProblemsRequired,
                 backgroundColor: Colors.white24,
@@ -117,13 +128,15 @@ class _MathGameScreenState extends State<MathGameScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               const SizedBox(height: 48),
-
-              // Пример
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: _showSuccess
-                    ? const Icon(Icons.check_circle,
-                        key: ValueKey('check'), color: Colors.greenAccent, size: 80)
+                    ? const Icon(
+                        Icons.check_circle,
+                        key: ValueKey('check'),
+                        color: Colors.greenAccent,
+                        size: 80,
+                      )
                     : Text(
                         '${_current.a} ${_current.op} ${_current.b} = ?',
                         key: ValueKey(_current.hashCode),
@@ -135,8 +148,6 @@ class _MathGameScreenState extends State<MathGameScreen> {
                       ),
               ),
               const SizedBox(height: 40),
-
-              // Поле ввода
               TextField(
                 controller: _answerController,
                 autofocus: true,
@@ -163,7 +174,6 @@ class _MathGameScreenState extends State<MathGameScreen> {
                 onSubmitted: (_) => _checkAnswer(),
               ),
               const SizedBox(height: 24),
-
               FilledButton(
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 52),
@@ -188,6 +198,7 @@ class _MathProblem {
   final int b;
   final String op;
   final int answer;
+
   const _MathProblem({
     required this.a,
     required this.b,

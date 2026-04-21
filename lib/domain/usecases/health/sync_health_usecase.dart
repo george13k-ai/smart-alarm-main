@@ -1,57 +1,72 @@
-import '../../repositories/health_repository.dart';
 import '../../entities/health_data.dart';
+import '../../repositories/health_repository.dart';
 import '../../../core/utils/recovery_algorithm.dart';
 
 class SyncHealthDataUseCase {
   final HealthRepository _repo;
   SyncHealthDataUseCase(this._repo);
 
-  Future<void> call() async {
-    await _repo.syncFromHealthConnect(days: 7);
-    await _recalculateSummaries();
+  Future<void> call({int days = 30}) async {
+    await _repo.syncFromHealthConnect(days: days);
+    await _recalculateSummaries(days: days);
   }
 
-  Future<void> _recalculateSummaries() async {
-    final sleepList = await _repo.getSleepData(days: 7);
-    final activityList = await _repo.getActivityData(days: 7);
+  Future<void> _recalculateSummaries({required int days}) async {
+    await _repo.clearDailySummaries();
+    final sleepList = await _repo.getSleepData(days: days);
+    final activityList = await _repo.getActivityData(days: days);
 
-    // Группируем по дате (только дата без времени)
-    final Map<String, SleepData> sleepByDate = {};
+    final Map<String, int> sleepMinutesByDate = {};
     for (final s in sleepList) {
       final key = _dateKey(s.date);
-      // Берём последнюю запись за день
-      sleepByDate[key] = s;
+      sleepMinutesByDate[key] =
+          (sleepMinutesByDate[key] ?? 0) + s.durationMinutes;
     }
 
-    final Map<String, ActivityData> activityByDate = {};
+    final Map<String, int> stepsByDate = {};
+    final Map<String, List<double>> hrSamplesByDate = {};
     for (final a in activityList) {
       final key = _dateKey(a.date);
-      activityByDate[key] = a;
+      stepsByDate[key] = (stepsByDate[key] ?? 0) + a.steps;
+      if (a.heartRate != null) {
+        hrSamplesByDate.putIfAbsent(key, () => <double>[]).add(a.heartRate!);
+      }
     }
 
-    final allKeys = {...sleepByDate.keys, ...activityByDate.keys};
+    final allKeys = {...sleepMinutesByDate.keys, ...stepsByDate.keys}.toList()
+      ..sort();
+
     for (final key in allKeys) {
-      final sleep = sleepByDate[key];
-      final activity = activityByDate[key];
+      final sleepMinutes = sleepMinutesByDate[key] ?? 0;
+      final steps = stepsByDate[key] ?? 0;
+      final hrList = hrSamplesByDate[key];
+      final heartRate = (hrList != null && hrList.isNotEmpty)
+          ? hrList.reduce((a, b) => a + b) / hrList.length
+          : null;
+
       final result = calculateRecovery(
-        sleepMinutes: sleep?.durationMinutes ?? 0,
-        steps: activity?.steps ?? 0,
-        heartRate: activity?.heartRate,
+        sleepMinutes: sleepMinutes,
+        steps: steps,
+        heartRate: heartRate,
       );
+
       final parts = key.split('-');
       final date = DateTime(
         int.parse(parts[0]),
         int.parse(parts[1]),
         int.parse(parts[2]),
       );
-      await _repo.saveDailySummary(DailyHealthSummary(
-        date: date,
-        sleepMinutes: sleep?.durationMinutes ?? 0,
-        steps: activity?.steps ?? 0,
-        heartRate: activity?.heartRate,
-        recoveryIndex: result.recoveryIndex,
-        wakeTimeOffset: result.wakeTimeOffset,
-      ));
+
+      await _repo.saveDailySummary(
+        DailyHealthSummary(
+          date: date,
+          sleepMinutes: sleepMinutes,
+          steps: steps,
+          heartRate: heartRate,
+          recoveryIndex: result.recoveryIndex,
+          wakeTimeOffset: 0,
+        ),
+      );
     }
   }
 

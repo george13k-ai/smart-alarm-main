@@ -22,7 +22,6 @@ class _AlarmDetailScreenState extends ConsumerState<AlarmDetailScreen> {
   late String _name;
   late List<int> _weekdays;
   late DismissType _dismissType;
-  String? _qrCode;
   late String _soundFile;
 
   final _nameController = TextEditingController();
@@ -43,7 +42,6 @@ class _AlarmDetailScreenState extends ConsumerState<AlarmDetailScreen> {
     _name = a.name;
     _weekdays = List.from(a.weekdays);
     _dismissType = a.dismissType;
-    _qrCode = a.qrCode;
     _soundFile = a.soundFile;
     _nameController.text = _name;
 
@@ -210,15 +208,6 @@ class _AlarmDetailScreenState extends ConsumerState<AlarmDetailScreen> {
                 groupValue: _dismissType,
                 onChanged: (v) => setState(() => _dismissType = v!),
               )),
-          if (_dismissType == DismissType.qr) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.qr_code),
-              label: Text(
-                  _qrCode == null ? 'Сканировать QR-код' : 'QR сохранён ✓'),
-              onPressed: _scanQr,
-            ),
-          ],
           const SizedBox(height: 32),
           FilledButton.icon(
             icon: const Icon(Icons.save),
@@ -341,16 +330,6 @@ class _AlarmDetailScreenState extends ConsumerState<AlarmDetailScreen> {
     }
   }
 
-  Future<void> _scanQr() async {
-    final result = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const _QrSaveScreen(),
-      ),
-    );
-    if (result != null) setState(() => _qrCode = result);
-  }
-
   Future<void> _save() async {
     await _stopPreview();
 
@@ -363,7 +342,6 @@ class _AlarmDetailScreenState extends ConsumerState<AlarmDetailScreen> {
       minute: _minute,
       weekdays: normalizedWeekdays,
       dismissType: _dismissType,
-      qrCode: _dismissType == DismissType.qr ? _qrCode : null,
       soundFile: _soundFile,
       isEnabled: widget.alarm.isEnabled,
     );
@@ -405,8 +383,8 @@ class _AlarmDetailScreenState extends ConsumerState<AlarmDetailScreen> {
         return const Icon(Icons.calculate_outlined);
       case DismissType.shake:
         return const Icon(Icons.vibration);
-      case DismissType.qr:
-        return const Icon(Icons.qr_code_scanner);
+      case DismissType.color:
+        return const Icon(Icons.palette_outlined);
     }
   }
 }
@@ -449,117 +427,3 @@ class _WeekdaySelectorState extends State<_WeekdaySelector> {
   }
 }
 
-class _QrSaveScreen extends StatefulWidget {
-  const _QrSaveScreen();
-
-  @override
-  State<_QrSaveScreen> createState() => _QrSaveScreenState();
-}
-
-class _QrSaveScreenState extends State<_QrSaveScreen> {
-  String? _scanned;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Сохранить QR-код')),
-      body: _scanned == null ? _buildScanner() : _buildConfirm(),
-    );
-  }
-
-  Widget _buildScanner() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.qr_code_scanner, size: 80, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text(
-            'Наведите камеру на QR-код,\nкоторый будет использоваться для отключения будильника',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _launchScanner,
-            child: const Text('Открыть сканер'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConfirm() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.check_circle, size: 80, color: Colors.green),
-          const SizedBox(height: 16),
-          const Text('QR-код сохранён!'),
-          const SizedBox(height: 8),
-          Text(
-            _scanned!,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, _scanned),
-            child: const Text('Использовать этот QR'),
-          ),
-          TextButton(
-            onPressed: () => setState(() => _scanned = null),
-            child: const Text('Сканировать снова'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _launchScanner() async {
-    final result = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const _QrScannerView()),
-    );
-    if (result != null) setState(() => _scanned = result);
-  }
-}
-
-class _QrScannerView extends StatefulWidget {
-  const _QrScannerView();
-
-  @override
-  State<_QrScannerView> createState() => _QrScannerViewState();
-}
-
-class _QrScannerViewState extends State<_QrScannerView> {
-  bool _scanned = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Сканирование QR')),
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
-    return MobileScannerWrapper(
-      onDetect: (code) {
-        if (!_scanned) {
-          _scanned = true;
-          Navigator.pop(context, code);
-        }
-      },
-    );
-  }
-}
-
-class MobileScannerWrapper extends StatelessWidget {
-  final ValueChanged<String> onDetect;
-  const MobileScannerWrapper({super.key, required this.onDetect});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('QR Scanner (mobile_scanner)'));
-  }
-}

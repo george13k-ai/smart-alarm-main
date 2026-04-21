@@ -285,8 +285,6 @@ class _AchievementTile extends StatelessWidget {
         final pMin = a.progress;
         final tMin = a.target;
         return '${(pMin / 60).toStringAsFixed(1)} из ${(tMin / 60).toStringAsFixed(0)} ч';
-      case 'recovery_90':
-        return '${a.progress} из ${a.target} (индекс)';
       case 'math_master':
         return '${a.progress} из ${a.target} задач';
       default:
